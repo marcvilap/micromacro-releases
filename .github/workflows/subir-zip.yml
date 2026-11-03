@@ -1,0 +1,27 @@
+# Claude sube el zip del PC troceado a una rama upload/vX.Y.Z; esta acción lo junta,
+# comprueba el SHA-256 del version.json, lo adjunta a la release con ese tag y la publica.
+name: Subir zip a la release
+on:
+  push:
+    branches: ['upload/**']
+permissions:
+  contents: write
+jobs:
+  subir:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Juntar, verificar y subir
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME#upload/}"
+          ZIP=$(jq -r .zip version.json)
+          SHA=$(jq -r .sha256 version.json)
+          cat parts/part_* > "$ZIP"
+          echo "$SHA  $ZIP" | sha256sum -c -
+          gh release upload "$TAG" "$ZIP" version.json --clobber
+          if [ -f publish ]; then gh release edit "$TAG" --draft=false --latest; fi
+      - name: Borrar la rama temporal
+        if: always()
+        run: git push origin --delete "$GITHUB_REF_NAME" || true
